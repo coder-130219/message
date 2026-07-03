@@ -7,14 +7,14 @@
 <style>
   /* ============ 디자인 토큰 (라이트 테마) ============ */
   :root {
-    --bg: #f6f8fa;          /* 전체 배경 */
-    --panel: #ffffff;       /* 사이드바/카드 */
+    --bg: #f6f8fa;
+    --panel: #ffffff;
     --border: #e3e8ee;
     --text: #24313f;
     --text-soft: #7a8896;
-    --accent: #12a594;      /* 틸 그린 */
+    --accent: #12a594;
     --accent-soft: #e0f5f2;
-    --me-bubble: #d3f0ec;   /* 내 메시지 말풍선 */
+    --me-bubble: #d3f0ec;
     --other-bubble: #ffffff;
     --danger: #d64545;
     --radius: 14px;
@@ -45,10 +45,7 @@
     width: 100%; max-width: 380px;
     box-shadow: 0 12px 40px rgba(18, 165, 148, 0.10);
   }
-  .logo {
-    font-size: 28px; font-weight: 800; letter-spacing: -0.5px;
-    margin-bottom: 4px;
-  }
+  .logo { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 4px; }
   .logo span { color: var(--accent); }
   .login-sub { color: var(--text-soft); font-size: 14px; margin-bottom: 24px; }
   .login-card label {
@@ -88,31 +85,40 @@
   #chat { display: none; height: 100dvh; }
   #chat.show { display: flex; }
 
-  /* 사이드바 */
   #sidebar {
-    width: 220px; flex-shrink: 0;
+    width: 230px; flex-shrink: 0;
     background: var(--panel); border-right: 1px solid var(--border);
     display: flex; flex-direction: column; padding: 18px 12px;
+    overflow-y: auto;
   }
   #sidebar .logo { font-size: 20px; padding: 0 8px 14px; }
   .side-title {
     font-size: 11px; font-weight: 700; text-transform: uppercase;
     letter-spacing: 0.8px; color: var(--text-soft); padding: 12px 8px 6px;
   }
-  .channel-btn {
-    display: block; width: 100%; text-align: left;
+  .side-btn {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%; text-align: left;
     padding: 9px 12px; margin: 2px 0;
     font-size: 15px; font-weight: 600;
     border: none; border-radius: 10px;
     background: transparent; color: var(--text-soft);
   }
-  .channel-btn.active { background: var(--accent-soft); color: var(--accent); }
-  #onlineUl { list-style: none; padding: 0 8px; overflow-y: auto; }
-  #onlineUl li {
-    font-size: 14px; padding: 4px 0; color: var(--text);
-    display: flex; align-items: center; gap: 8px;
+  .side-btn.active { background: var(--accent-soft); color: var(--accent); }
+  .side-btn .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #38c172; flex-shrink: 0;
   }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: #38c172; flex-shrink: 0; }
+  .side-btn .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge {
+    background: var(--danger); color: #fff;
+    font-size: 11px; font-weight: 700;
+    min-width: 18px; height: 18px; padding: 0 5px;
+    border-radius: 999px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .empty-note { font-size: 13px; color: var(--text-soft); padding: 4px 12px; }
 
   /* 메인 영역 */
   #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -123,7 +129,6 @@
   }
   #channelTitle { font-size: 17px; font-weight: 700; }
 
-  /* 메시지 목록 */
   #messages {
     flex: 1; overflow-y: auto; padding: 20px;
     display: flex; flex-direction: column; gap: 10px;
@@ -154,7 +159,6 @@
     background: #eef1f4; padding: 4px 14px; border-radius: 999px;
   }
 
-  /* 입력창 */
   #inputBar {
     display: flex; gap: 10px; padding: 14px 20px 18px;
     background: var(--panel); border-top: 1px solid var(--border);
@@ -177,11 +181,13 @@
     #chat.show { flex-direction: column; }
     #sidebar {
       width: 100%; flex-direction: row; align-items: center;
-      padding: 8px 10px; gap: 6px; overflow-x: auto;
+      padding: 8px 10px; gap: 6px;
+      overflow-x: auto; overflow-y: hidden;
       border-right: none; border-bottom: 1px solid var(--border);
     }
-    #sidebar .logo, .side-title, #onlineBox { display: none; }
-    .channel-btn { width: auto; white-space: nowrap; }
+    #sidebar .logo, .side-title, .empty-note { display: none; }
+    #channelList, #dmList { display: flex; gap: 6px; }
+    .side-btn { width: auto; white-space: nowrap; }
     .msg { max-width: 88%; }
   }
 </style>
@@ -209,10 +215,8 @@
     <div class="logo">Friends<span style="color:var(--accent)">Chat</span></div>
     <div class="side-title" data-i18n="channels"></div>
     <div id="channelList"></div>
-    <div id="onlineBox" style="flex:1; display:flex; flex-direction:column; min-height:0;">
-      <div class="side-title"><span data-i18n="online"></span> (<span id="onlineCount">0</span>)</div>
-      <ul id="onlineUl"></ul>
-    </div>
+    <div class="side-title" data-i18n="dm"></div>
+    <div id="dmList"></div>
   </aside>
 
   <div id="main">
@@ -240,13 +244,16 @@ const I18N = {
     password: "Room password",
     enter: "Enter",
     channels: "Channels",
-    online: "Online",
+    dm: "Direct messages",
     send: "Send",
     placeholder: "Type a message...",
+    noOneOnline: "No one else is online",
     joinMsg: (n) => `${n} joined the chat`,
     leaveMsg: (n) => `${n} left the chat`,
+    offlineMsg: (n) => `${n} is offline — they'll see this when they come back`,
     errPassword: "Wrong password. Ask the room owner!",
     errNick: "Please enter a nickname (max 20 chars).",
+    errNickTaken: "That nickname is already in use. Pick another one!",
     errConn: "Can't reach the server. Try again.",
     channelNames: { general: "general", games: "games", homework: "homework" }
   },
@@ -256,13 +263,16 @@ const I18N = {
     password: "입장 비밀번호",
     enter: "입장하기",
     channels: "채널",
-    online: "접속 중",
+    dm: "개인 메시지",
     send: "전송",
     placeholder: "메시지를 입력하세요...",
+    noOneOnline: "지금 접속한 친구가 없어요",
     joinMsg: (n) => `${n} 님이 입장했어요`,
     leaveMsg: (n) => `${n} 님이 나갔어요`,
+    offlineMsg: (n) => `${n} 님은 지금 오프라인이에요 — 다시 들어오면 볼 수 있어요`,
     errPassword: "비밀번호가 틀렸어요. 방장에게 물어보세요!",
     errNick: "닉네임을 입력해주세요 (최대 20자).",
+    errNickTaken: "이미 사용 중인 닉네임이에요. 다른 걸로 해주세요!",
     errConn: "서버에 연결할 수 없어요. 다시 시도해주세요.",
     channelNames: { general: "일반", games: "게임", homework: "숙제" }
   },
@@ -272,20 +282,22 @@ const I18N = {
     password: "入室パスワード",
     enter: "入室する",
     channels: "チャンネル",
-    online: "オンライン",
+    dm: "ダイレクトメッセージ",
     send: "送信",
     placeholder: "メッセージを入力...",
+    noOneOnline: "オンラインの友だちがいません",
     joinMsg: (n) => `${n} さんが入室しました`,
     leaveMsg: (n) => `${n} さんが退室しました`,
+    offlineMsg: (n) => `${n} さんはオフラインです — 戻ってきたら見られます`,
     errPassword: "パスワードが違います。ルームの管理者に聞いてください！",
     errNick: "ニックネームを入力してください（最大20文字）。",
+    errNickTaken: "そのニックネームは使用中です。別の名前にしてください！",
     errConn: "サーバーに接続できません。もう一度お試しください。",
     channelNames: { general: "一般", games: "ゲーム", homework: "宿題" }
   }
 };
 const LANG_LABELS = { en: "EN", ko: "한국어", ja: "日本語" };
 
-// 저장된 언어 → 없으면 기기 언어 → 없으면 영어
 let lang = localStorage.getItem("chatLang");
 if (!I18N[lang]) {
   const nav = (navigator.language || "en").slice(0, 2);
@@ -299,7 +311,9 @@ const t = () => I18N[lang];
 let socket = null;
 let myNick = "";
 let channels = [];
-let currentChannel = "general";
+let onlineUsers = [];               // 전체 접속자 닉네임
+let view = { type: "channel", id: "general" }; // 지금 보고 있는 곳
+const unread = {};                  // 닉네임 → 안 읽은 DM 개수
 
 /* ==================================================
    3. 화면 요소
@@ -307,7 +321,6 @@ let currentChannel = "general";
 const $ = (id) => document.getElementById(id);
 const loginEl = $("login"), chatEl = $("chat");
 const messagesEl = $("messages"), msgInput = $("msgInput");
-const onlineUl = $("onlineUl"), onlineCount = $("onlineCount");
 
 /* ==================================================
    4. 언어 적용
@@ -330,54 +343,107 @@ function applyLang() {
   msgInput.placeholder = t().placeholder;
   buildLangChips($("langChipsLogin"));
   buildLangChips($("langChipsChat"));
-  renderChannels();
-  updateChannelTitle();
+  renderSidebar();
+  updateTitle();
 }
 
 /* ==================================================
-   5. 채널
+   5. 사이드바 (채널 + DM 목록)
 ================================================== */
 function channelName(ch) { return t().channelNames[ch] || ch; }
-function updateChannelTitle() { $("channelTitle").textContent = "# " + channelName(currentChannel); }
+function updateTitle() {
+  $("channelTitle").textContent =
+    view.type === "channel" ? "# " + channelName(view.id) : "@ " + view.id;
+}
 
-function renderChannels() {
-  const list = $("channelList");
-  list.innerHTML = "";
+function renderSidebar() {
+  // 채널 목록
+  const chList = $("channelList");
+  chList.innerHTML = "";
   for (const ch of channels) {
     const b = document.createElement("button");
-    b.className = "channel-btn" + (ch === currentChannel ? " active" : "");
+    b.className = "side-btn" + (view.type === "channel" && view.id === ch ? " active" : "");
     b.textContent = "# " + channelName(ch);
-    b.onclick = () => switchChannel(ch);
-    list.appendChild(b);
+    b.onclick = () => openChannel(ch);
+    chList.appendChild(b);
+  }
+
+  // DM 목록 (나를 제외한 접속자)
+  const dmList = $("dmList");
+  dmList.innerHTML = "";
+  const others = onlineUsers.filter((n) => n !== myNick);
+  if (others.length === 0) {
+    const p = document.createElement("div");
+    p.className = "empty-note";
+    p.textContent = t().noOneOnline;
+    dmList.appendChild(p);
+    return;
+  }
+  for (const n of others) {
+    const b = document.createElement("button");
+    b.className = "side-btn" + (view.type === "dm" && view.id === n ? " active" : "");
+
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = n;
+    b.appendChild(dot);
+    b.appendChild(name);
+
+    if (unread[n]) {
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = unread[n] > 9 ? "9+" : unread[n];
+      b.appendChild(badge);
+    }
+    b.onclick = () => openDm(n);
+    dmList.appendChild(b);
   }
 }
-function switchChannel(ch) {
-  if (ch === currentChannel) return;
+
+/* ==================================================
+   6. 채널 / DM 열기
+================================================== */
+function openChannel(ch) {
+  if (view.type === "channel" && view.id === ch) return;
   socket.emit("switchChannel", ch, (res) => {
-    currentChannel = ch;
+    view = { type: "channel", id: ch };
     messagesEl.innerHTML = "";
-    res.history.forEach(addMessage);
-    renderChannels();
-    updateChannelTitle();
+    res.history.forEach((m) => addMessage(m.nick, m.text, m.time));
+    renderSidebar();
+    updateTitle();
+  });
+}
+
+function openDm(other) {
+  socket.emit("openDm", other, (res) => {
+    view = { type: "dm", id: other };
+    unread[other] = 0; // 읽음 처리
+    messagesEl.innerHTML = "";
+    res.history.forEach((m) => addMessage(m.from, m.text, m.time));
+    renderSidebar();
+    updateTitle();
+    msgInput.focus();
   });
 }
 
 /* ==================================================
-   6. 메시지 그리기 (textContent 사용 → XSS 방지)
+   7. 메시지 그리기 (textContent 사용 → XSS 방지)
 ================================================== */
 function avatarColor(nick) {
   let h = 0;
   for (const c of nick) h = (h * 31 + c.charCodeAt(0)) % 360;
   return `hsl(${h}, 55%, 55%)`;
 }
-function addMessage(msg) {
+function addMessage(nick, text, time) {
   const div = document.createElement("div");
-  div.className = "msg" + (msg.nick === myNick ? " me" : "");
+  div.className = "msg" + (nick === myNick ? " me" : "");
 
   const av = document.createElement("div");
   av.className = "avatar";
-  av.style.background = avatarColor(msg.nick);
-  av.textContent = msg.nick[0].toUpperCase();
+  av.style.background = avatarColor(nick);
+  av.textContent = nick[0].toUpperCase();
 
   const wrap = document.createElement("div");
   wrap.className = "bubble-wrap";
@@ -385,14 +451,14 @@ function addMessage(msg) {
   const meta = document.createElement("div");
   meta.className = "meta";
   const name = document.createElement("b");
-  name.textContent = msg.nick;
-  const time = new Date(msg.time).toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit" });
+  name.textContent = nick;
+  const timeStr = new Date(time).toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit" });
   meta.appendChild(name);
-  meta.appendChild(document.createTextNode(time));
+  meta.appendChild(document.createTextNode(timeStr));
 
   const bubble = document.createElement("div");
   bubble.className = "bubble";
-  bubble.textContent = msg.text;
+  bubble.textContent = text;
 
   wrap.appendChild(meta);
   wrap.appendChild(bubble);
@@ -410,7 +476,7 @@ function addSystem(text) {
 }
 
 /* ==================================================
-   7. 입장 / 소켓 이벤트
+   8. 입장 / 소켓 이벤트
 ================================================== */
 $("joinBtn").onclick = join;
 $("passInput").addEventListener("keydown", (e) => { if (e.key === "Enter") join(); });
@@ -422,50 +488,73 @@ function join() {
 
   if (!socket) {
     socket = io();
-    socket.on("message", (msg) => addMessage(msg));
+
+    // 채널 메시지 도착
+    socket.on("message", (m) => {
+      if (view.type === "channel") addMessage(m.nick, m.text, m.time);
+    });
+
+    // DM 도착
+    socket.on("dm", (m) => {
+      const other = m.from === myNick ? m.to : m.from; // 상대방 닉네임
+      if (view.type === "dm" && view.id === other) {
+        addMessage(m.from, m.text, m.time);
+      } else if (m.from !== myNick) {
+        unread[other] = (unread[other] || 0) + 1; // 안 읽은 개수 +1
+        renderSidebar();
+      }
+    });
+
+    // 입장/퇴장 알림 (채널 화면에서만 표시)
     socket.on("system", (ev) => {
-      addSystem(ev.type === "join" ? t().joinMsg(ev.nick) : t().leaveMsg(ev.nick));
+      if (view.type === "channel") {
+        addSystem(ev.type === "join" ? t().joinMsg(ev.nick) : t().leaveMsg(ev.nick));
+      }
     });
+
+    // 접속자 목록 갱신
     socket.on("online", (names) => {
-      onlineCount.textContent = names.length;
-      onlineUl.innerHTML = "";
-      names.forEach((n) => {
-        const li = document.createElement("li");
-        const dot = document.createElement("span");
-        dot.className = "dot";
-        li.appendChild(dot);
-        li.appendChild(document.createTextNode(n));
-        onlineUl.appendChild(li);
-      });
+      onlineUsers = names;
+      renderSidebar();
     });
+
     socket.on("connect_error", () => { $("loginError").textContent = t().errConn; });
   }
 
   socket.emit("join", { nick, password }, (res) => {
     if (!res.ok) {
-      $("loginError").textContent = res.error === "bad_password" ? t().errPassword : t().errNick;
+      $("loginError").textContent =
+        res.error === "bad_password" ? t().errPassword :
+        res.error === "nick_taken" ? t().errNickTaken : t().errNick;
       return;
     }
     myNick = nick;
     channels = res.channels;
-    currentChannel = res.channel;
+    view = { type: "channel", id: res.channel };
     loginEl.style.display = "none";
     chatEl.classList.add("show");
     messagesEl.innerHTML = "";
-    res.history.forEach(addMessage);
-    renderChannels();
-    updateChannelTitle();
+    res.history.forEach((m) => addMessage(m.nick, m.text, m.time));
+    renderSidebar();
+    updateTitle();
     msgInput.focus();
   });
 }
 
 /* ==================================================
-   8. 메시지 보내기
+   9. 메시지 보내기 (채널 or DM)
 ================================================== */
 function send() {
   const text = msgInput.value.trim();
   if (!text) return;
-  socket.emit("message", text);
+
+  if (view.type === "channel") {
+    socket.emit("message", text);
+  } else {
+    socket.emit("dm", { to: view.id, text }, (res) => {
+      if (res && !res.delivered) addSystem(t().offlineMsg(view.id));
+    });
+  }
   msgInput.value = "";
   msgInput.focus();
 }
