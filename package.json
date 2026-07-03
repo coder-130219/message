@@ -1,0 +1,17 @@
+{
+  "name": "friends-chat",
+  "version": "1.0.0",
+  "description": "Web chat for friends (EN/KO/JA)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.8.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
