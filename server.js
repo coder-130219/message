@@ -1,5 +1,5 @@
 // ============================================
-//  친구들 채팅 서버 (Node.js + Socket.IO)
+//  친구들 채팅 서버 v2 — 채널 + 개인 메시지(DM)
 //  실행: npm install → npm start
 // ============================================
 const express = require("express");
@@ -11,31 +11,29 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 // ★ 입장 비밀번호 — 친구들에게만 알려주세요!
-//   (호스팅 사이트의 환경변수 CHAT_PASSWORD 로도 설정 가능)
 const PASSWORD = process.env.CHAT_PASSWORD || "friends123";
 
-// 채널 목록 (내부 이름 — 화면에 보이는 이름은 클라이언트에서 언어별로 번역됨)
 const CHANNELS = ["general", "games", "homework"];
-
-// 채널별 최근 메시지 기록 (서버가 켜져 있는 동안만 유지)
 const HISTORY_LIMIT = 50;
+
+// 채널별 메시지 기록
 const history = {};
 CHANNELS.forEach((c) => (history[c] = []));
 
-// public 폴더의 웹페이지를 제공
+// DM 기록 — 키는 두 닉네임을 정렬해서 합친 것 (예: "민준|유나")
+const dmHistory = {};
+function dmKey(a, b) {
+  return [a, b].sort().join("|");
+}
+
+// 현재 접속 중인 사용자: 닉네임 → 소켓 ID
+const users = new Map();
+
 app.use(express.static("public"));
 
-// 특정 채널에 접속 중인 닉네임 목록 만들기
-function onlineList(channel) {
-  const room = io.sockets.adapter.rooms.get(channel);
-  const names = [];
-  if (room) {
-    for (const id of room) {
-      const s = io.sockets.sockets.get(id);
-      if (s && s.data.nick) names.push(s.data.nick);
-    }
-  }
-  return names;
+// 전체 접속자 목록을 모두에게 알림
+function broadcastOnline() {
+  io.emit("online", [...users.keys()]);
 }
 
 io.on("connection", (socket) => {
@@ -47,48 +45,79 @@ io.on("connection", (socket) => {
 
     if (password !== PASSWORD) return cb({ ok: false, error: "bad_password" });
     if (!nick || nick.length > 20) return cb({ ok: false, error: "bad_nick" });
+    if (users.has(nick)) return cb({ ok: false, error: "nick_taken" }); // 닉네임 중복 금지
 
     socket.data.nick = nick;
     socket.data.channel = "general";
+    users.set(nick, socket.id);
     socket.join("general");
 
     cb({ ok: true, channels: CHANNELS, channel: "general", history: history["general"] });
     io.to("general").emit("system", { type: "join", nick });
-    io.to("general").emit("online", onlineList("general"));
+    broadcastOnline();
   });
 
   // ---- 채널 이동 ----
   socket.on("switchChannel", (channel, cb) => {
     if (!socket.data.nick || !CHANNELS.includes(channel)) return;
-    const old = socket.data.channel;
-    socket.leave(old);
-    io.to(old).emit("online", onlineList(old));
-
+    socket.leave(socket.data.channel);
     socket.join(channel);
     socket.data.channel = channel;
     if (typeof cb === "function") cb({ history: history[channel] });
-    io.to(channel).emit("online", onlineList(channel));
   });
 
-  // ---- 메시지 전송 ----
+  // ---- 채널 메시지 ----
   socket.on("message", (text) => {
     if (!socket.data.nick || typeof text !== "string") return;
-    text = text.trim().slice(0, 500); // 최대 500자
+    text = text.trim().slice(0, 500);
     if (!text) return;
 
     const msg = { nick: socket.data.nick, text, time: Date.now() };
     const ch = socket.data.channel;
     history[ch].push(msg);
     if (history[ch].length > HISTORY_LIMIT) history[ch].shift();
-
     io.to(ch).emit("message", msg);
+  });
+
+  // ---- 개인 메시지 (DM) ----
+  socket.on("dm", (data, cb) => {
+    if (!socket.data.nick) return;
+    const to = data && typeof data.to === "string" ? data.to : "";
+    let text = data && typeof data.text === "string" ? data.text : "";
+    text = text.trim().slice(0, 500);
+    if (!to || !text || to === socket.data.nick) return;
+
+    const msg = { from: socket.data.nick, to, text, time: Date.now() };
+
+    // 기록 저장 (상대가 오프라인이어도 저장 → 다시 들어오면 볼 수 있음)
+    const key = dmKey(socket.data.nick, to);
+    if (!dmHistory[key]) dmHistory[key] = [];
+    dmHistory[key].push(msg);
+    if (dmHistory[key].length > HISTORY_LIMIT) dmHistory[key].shift();
+
+    // 나에게 + 상대에게 전달
+    socket.emit("dm", msg);
+    const targetId = users.get(to);
+    if (targetId) {
+      io.to(targetId).emit("dm", msg);
+      if (typeof cb === "function") cb({ delivered: true });
+    } else {
+      if (typeof cb === "function") cb({ delivered: false }); // 상대 오프라인
+    }
+  });
+
+  // ---- DM 대화 기록 불러오기 ----
+  socket.on("openDm", (other, cb) => {
+    if (!socket.data.nick || typeof other !== "string" || typeof cb !== "function") return;
+    cb({ history: dmHistory[dmKey(socket.data.nick, other)] || [] });
   });
 
   // ---- 접속 종료 ----
   socket.on("disconnect", () => {
-    if (socket.data.nick && socket.data.channel) {
+    if (socket.data.nick) {
+      users.delete(socket.data.nick);
       io.to(socket.data.channel).emit("system", { type: "leave", nick: socket.data.nick });
-      io.to(socket.data.channel).emit("online", onlineList(socket.data.channel));
+      broadcastOnline();
     }
   });
 });
