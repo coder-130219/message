@@ -1,5 +1,5 @@
 // ============================================
-//  친구들 채팅 서버 v2 — 채널 + 개인 메시지(DM)
+//  친구들 채팅 서버 v3 — 채널 + DM + 음성 통화
 //  실행: npm install → npm start
 // ============================================
 const express = require("express");
@@ -20,24 +20,23 @@ const HISTORY_LIMIT = 50;
 const history = {};
 CHANNELS.forEach((c) => (history[c] = []));
 
-// DM 기록 — 키는 두 닉네임을 정렬해서 합친 것 (예: "민준|유나")
+// DM 기록 — 키는 두 닉네임을 정렬해서 합친 것
 const dmHistory = {};
 function dmKey(a, b) {
   return [a, b].sort().join("|");
 }
 
-// 현재 접속 중인 사용자: 닉네임 → 소켓 ID
+// 접속 중인 사용자: 닉네임 → 소켓 ID
 const users = new Map();
 
 app.use(express.static("public"));
 
-// 전체 접속자 목록을 모두에게 알림
 function broadcastOnline() {
   io.emit("online", [...users.keys()]);
 }
 
 io.on("connection", (socket) => {
-  // ---- 입장 (닉네임 + 비밀번호 확인) ----
+  // ---- 입장 ----
   socket.on("join", (data, cb) => {
     if (typeof cb !== "function") return;
     const nick = (data && typeof data.nick === "string" ? data.nick : "").trim();
@@ -45,7 +44,7 @@ io.on("connection", (socket) => {
 
     if (password !== PASSWORD) return cb({ ok: false, error: "bad_password" });
     if (!nick || nick.length > 20) return cb({ ok: false, error: "bad_nick" });
-    if (users.has(nick)) return cb({ ok: false, error: "nick_taken" }); // 닉네임 중복 금지
+    if (users.has(nick)) return cb({ ok: false, error: "nick_taken" });
 
     socket.data.nick = nick;
     socket.data.channel = "general";
@@ -88,29 +87,43 @@ io.on("connection", (socket) => {
     if (!to || !text || to === socket.data.nick) return;
 
     const msg = { from: socket.data.nick, to, text, time: Date.now() };
-
-    // 기록 저장 (상대가 오프라인이어도 저장 → 다시 들어오면 볼 수 있음)
     const key = dmKey(socket.data.nick, to);
     if (!dmHistory[key]) dmHistory[key] = [];
     dmHistory[key].push(msg);
     if (dmHistory[key].length > HISTORY_LIMIT) dmHistory[key].shift();
 
-    // 나에게 + 상대에게 전달
     socket.emit("dm", msg);
     const targetId = users.get(to);
     if (targetId) {
       io.to(targetId).emit("dm", msg);
       if (typeof cb === "function") cb({ delivered: true });
     } else {
-      if (typeof cb === "function") cb({ delivered: false }); // 상대 오프라인
+      if (typeof cb === "function") cb({ delivered: false });
     }
   });
 
-  // ---- DM 대화 기록 불러오기 ----
+  // ---- DM 기록 불러오기 ----
   socket.on("openDm", (other, cb) => {
     if (!socket.data.nick || typeof other !== "string" || typeof cb !== "function") return;
     cb({ history: dmHistory[dmKey(socket.data.nick, other)] || [] });
   });
+
+  // ---- 통화 신호 중계 (WebRTC 시그널링) ----
+  // 목소리 자체는 친구 기기끼리 직접 오가고,
+  // 서버는 "전화 걸었어요/받았어요/끊었어요" 신호만 전달해요.
+  const CALL_EVENTS = ["call:offer", "call:answer", "call:ice", "call:end", "call:decline", "call:busy"];
+  for (const event of CALL_EVENTS) {
+    socket.on(event, (data) => {
+      if (!socket.data.nick || !data || typeof data.to !== "string") return;
+      const targetId = users.get(data.to);
+      if (!targetId) {
+        // 상대가 오프라인이면 건 사람에게 알려줌
+        socket.emit("call:unavailable", { from: data.to });
+        return;
+      }
+      io.to(targetId).emit(event, { ...data, from: socket.data.nick });
+    });
+  }
 
   // ---- 접속 종료 ----
   socket.on("disconnect", () => {
