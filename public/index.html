@@ -124,10 +124,67 @@
   #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   #topbar {
     display: flex; align-items: center; justify-content: space-between;
+    gap: 10px;
     padding: 14px 20px; background: var(--panel);
     border-bottom: 1px solid var(--border);
   }
-  #channelTitle { font-size: 17px; font-weight: 700; }
+  #channelTitle { font-size: 17px; font-weight: 700; flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #callBtn {
+    display: none;
+    padding: 7px 16px; font-size: 14px; font-weight: 700;
+    color: #fff; background: var(--accent);
+    border: none; border-radius: 999px;
+    flex-shrink: 0;
+  }
+  #callBtn.show { display: block; }
+
+  /* ---- 통화 상태 바 ---- */
+  #callBar {
+    display: none;
+    align-items: center; justify-content: space-between; gap: 10px;
+    padding: 10px 20px;
+    background: var(--accent-soft);
+    border-bottom: 1px solid #bfe6e0;
+  }
+  #callBar.show { display: flex; }
+  #callStatus { font-size: 14px; font-weight: 600; color: var(--accent); }
+  #callTimer { font-variant-numeric: tabular-nums; }
+  #hangupBtn {
+    padding: 7px 16px; font-size: 14px; font-weight: 700;
+    color: #fff; background: var(--danger);
+    border: none; border-radius: 999px;
+  }
+
+  /* ---- 수신 배너 ---- */
+  #incomingBar {
+    display: none;
+    position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+    z-index: 20;
+    align-items: center; gap: 14px;
+    padding: 14px 20px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: 0 10px 34px rgba(36, 49, 63, 0.18);
+    max-width: calc(100% - 28px);
+  }
+  #incomingBar.show { display: flex; animation: ringPulse 1.2s ease-in-out infinite; }
+  @keyframes ringPulse {
+    0%, 100% { box-shadow: 0 10px 34px rgba(36, 49, 63, 0.18); }
+    50% { box-shadow: 0 10px 34px rgba(18, 165, 148, 0.35); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #incomingBar.show { animation: none; }
+  }
+  #incomingText { font-size: 15px; font-weight: 600; }
+  #acceptBtn, #declineBtn {
+    padding: 9px 18px; font-size: 14px; font-weight: 700;
+    color: #fff; border: none; border-radius: 999px;
+    flex-shrink: 0;
+  }
+  #acceptBtn { background: #38c172; }
+  #declineBtn { background: var(--danger); }
 
   #messages {
     flex: 1; overflow-y: auto; padding: 20px;
@@ -176,7 +233,7 @@
   }
   #sendBtn:active { transform: scale(0.96); }
 
-  /* ============ 모바일 (좁은 화면) ============ */
+  /* ============ 모바일 ============ */
   @media (max-width: 640px) {
     #chat.show { flex-direction: column; }
     #sidebar {
@@ -209,6 +266,14 @@
   </div>
 </div>
 
+<!-- ============ 전화 수신 배너 ============ -->
+<div id="incomingBar">
+  <span style="font-size:22px">📞</span>
+  <span id="incomingText"></span>
+  <button id="acceptBtn" data-i18n="accept"></button>
+  <button id="declineBtn" data-i18n="decline"></button>
+</div>
+
 <!-- ============ 채팅 화면 ============ -->
 <div id="chat">
   <aside id="sidebar">
@@ -222,7 +287,14 @@
   <div id="main">
     <div id="topbar">
       <div id="channelTitle"></div>
+      <button id="callBtn"></button>
       <div class="lang-chips" id="langChipsChat"></div>
+    </div>
+    <div id="callBar">
+      <span id="callStatus"></span>
+      <span style="flex:1"></span>
+      <span id="callTimer"></span>
+      <button id="hangupBtn" data-i18n="hangUp"></button>
     </div>
     <div id="messages"></div>
     <div id="inputBar">
@@ -248,9 +320,22 @@ const I18N = {
     send: "Send",
     placeholder: "Type a message...",
     noOneOnline: "No one else is online",
+    call: "📞 Call",
+    accept: "Accept",
+    decline: "Decline",
+    hangUp: "End",
     joinMsg: (n) => `${n} joined the chat`,
     leaveMsg: (n) => `${n} left the chat`,
     offlineMsg: (n) => `${n} is offline — they'll see this when they come back`,
+    incoming: (n) => `${n} is calling...`,
+    calling: (n) => `Calling ${n}...`,
+    inCall: (n) => `In call with ${n}`,
+    callEnded: "Call ended",
+    callDeclined: (n) => `${n} declined the call`,
+    callBusy: (n) => `${n} is on another call`,
+    callOffline: (n) => `${n} is offline right now`,
+    callFailed: "Couldn't connect the call — your networks may be blocking it",
+    errMic: "Microphone access is needed for calls. Please allow it and try again.",
     errPassword: "Wrong password. Ask the room owner!",
     errNick: "Please enter a nickname (max 20 chars).",
     errNickTaken: "That nickname is already in use. Pick another one!",
@@ -267,9 +352,22 @@ const I18N = {
     send: "전송",
     placeholder: "메시지를 입력하세요...",
     noOneOnline: "지금 접속한 친구가 없어요",
+    call: "📞 통화",
+    accept: "받기",
+    decline: "거절",
+    hangUp: "끊기",
     joinMsg: (n) => `${n} 님이 입장했어요`,
     leaveMsg: (n) => `${n} 님이 나갔어요`,
     offlineMsg: (n) => `${n} 님은 지금 오프라인이에요 — 다시 들어오면 볼 수 있어요`,
+    incoming: (n) => `${n} 님의 전화가 왔어요`,
+    calling: (n) => `${n} 님에게 전화 거는 중...`,
+    inCall: (n) => `${n} 님과 통화 중`,
+    callEnded: "통화가 끝났어요",
+    callDeclined: (n) => `${n} 님이 전화를 거절했어요`,
+    callBusy: (n) => `${n} 님은 다른 통화 중이에요`,
+    callOffline: (n) => `${n} 님은 지금 오프라인이에요`,
+    callFailed: "통화 연결에 실패했어요 — 네트워크가 막고 있을 수 있어요",
+    errMic: "통화하려면 마이크 사용을 허용해야 해요. 허용하고 다시 시도해주세요.",
     errPassword: "비밀번호가 틀렸어요. 방장에게 물어보세요!",
     errNick: "닉네임을 입력해주세요 (최대 20자).",
     errNickTaken: "이미 사용 중인 닉네임이에요. 다른 걸로 해주세요!",
@@ -286,9 +384,22 @@ const I18N = {
     send: "送信",
     placeholder: "メッセージを入力...",
     noOneOnline: "オンラインの友だちがいません",
+    call: "📞 通話",
+    accept: "応答",
+    decline: "拒否",
+    hangUp: "終了",
     joinMsg: (n) => `${n} さんが入室しました`,
     leaveMsg: (n) => `${n} さんが退室しました`,
     offlineMsg: (n) => `${n} さんはオフラインです — 戻ってきたら見られます`,
+    incoming: (n) => `${n} さんから着信中...`,
+    calling: (n) => `${n} さんに発信中...`,
+    inCall: (n) => `${n} さんと通話中`,
+    callEnded: "通話が終了しました",
+    callDeclined: (n) => `${n} さんが通話を拒否しました`,
+    callBusy: (n) => `${n} さんは別の通話中です`,
+    callOffline: (n) => `${n} さんは今オフラインです`,
+    callFailed: "通話を接続できませんでした — ネットワークがブロックしている可能性があります",
+    errMic: "通話にはマイクの使用許可が必要です。許可してからもう一度お試しください。",
     errPassword: "パスワードが違います。ルームの管理者に聞いてください！",
     errNick: "ニックネームを入力してください（最大20文字）。",
     errNickTaken: "そのニックネームは使用中です。別の名前にしてください！",
@@ -311,9 +422,9 @@ const t = () => I18N[lang];
 let socket = null;
 let myNick = "";
 let channels = [];
-let onlineUsers = [];               // 전체 접속자 닉네임
-let view = { type: "channel", id: "general" }; // 지금 보고 있는 곳
-const unread = {};                  // 닉네임 → 안 읽은 DM 개수
+let onlineUsers = [];
+let view = { type: "channel", id: "general" };
+const unread = {};
 
 /* ==================================================
    3. 화면 요소
@@ -341,10 +452,12 @@ function applyLang() {
     el.textContent = t()[el.dataset.i18n];
   });
   msgInput.placeholder = t().placeholder;
+  $("callBtn").textContent = t().call;
   buildLangChips($("langChipsLogin"));
   buildLangChips($("langChipsChat"));
   renderSidebar();
   updateTitle();
+  updateCallUi();
 }
 
 /* ==================================================
@@ -354,10 +467,11 @@ function channelName(ch) { return t().channelNames[ch] || ch; }
 function updateTitle() {
   $("channelTitle").textContent =
     view.type === "channel" ? "# " + channelName(view.id) : "@ " + view.id;
+  // 통화 버튼은 DM 화면에서만 보임
+  $("callBtn").classList.toggle("show", view.type === "dm");
 }
 
 function renderSidebar() {
-  // 채널 목록
   const chList = $("channelList");
   chList.innerHTML = "";
   for (const ch of channels) {
@@ -368,7 +482,6 @@ function renderSidebar() {
     chList.appendChild(b);
   }
 
-  // DM 목록 (나를 제외한 접속자)
   const dmList = $("dmList");
   dmList.innerHTML = "";
   const others = onlineUsers.filter((n) => n !== myNick);
@@ -419,7 +532,7 @@ function openChannel(ch) {
 function openDm(other) {
   socket.emit("openDm", other, (res) => {
     view = { type: "dm", id: other };
-    unread[other] = 0; // 읽음 처리
+    unread[other] = 0;
     messagesEl.innerHTML = "";
     res.history.forEach((m) => addMessage(m.from, m.text, m.time));
     renderSidebar();
@@ -476,7 +589,159 @@ function addSystem(text) {
 }
 
 /* ==================================================
-   8. 입장 / 소켓 이벤트
+   8. 음성 통화 (WebRTC)
+   목소리는 친구 기기끼리 직접 연결되고,
+   서버는 연결 신호만 전달해요.
+================================================== */
+let pc = null;             // WebRTC 연결
+let localStream = null;    // 내 마이크
+let callPeer = null;       // 통화 상대 닉네임
+let callState = "idle";    // idle | calling | ringing | incall
+let pendingOffer = null;   // 수신 대기 중인 offer
+let pendingIce = [];       // 아직 처리 못 한 ICE 후보들
+let callTimerId = null, callStartTime = 0;
+
+const remoteAudio = new Audio();
+remoteAudio.autoplay = true;
+
+const RTC_CONFIG = {
+  iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+};
+
+function updateCallUi() {
+  const bar = $("callBar");
+  if (callState === "calling") {
+    bar.classList.add("show");
+    $("callStatus").textContent = t().calling(callPeer);
+    $("callTimer").textContent = "";
+  } else if (callState === "incall") {
+    bar.classList.add("show");
+    $("callStatus").textContent = t().inCall(callPeer);
+  } else {
+    bar.classList.remove("show");
+  }
+  if (callState === "ringing" && callPeer) {
+    $("incomingText").textContent = t().incoming(callPeer);
+    $("incomingBar").classList.add("show");
+  } else {
+    $("incomingBar").classList.remove("show");
+  }
+}
+
+function startCallTimer() {
+  callStartTime = Date.now();
+  callTimerId = setInterval(() => {
+    const s = Math.floor((Date.now() - callStartTime) / 1000);
+    const mm = String(Math.floor(s / 60)).padStart(2, "0");
+    const ss = String(s % 60).padStart(2, "0");
+    $("callTimer").textContent = mm + ":" + ss;
+  }, 500);
+}
+
+function createPeerConnection() {
+  pc = new RTCPeerConnection(RTC_CONFIG);
+  pc.onicecandidate = (e) => {
+    if (e.candidate) socket.emit("call:ice", { to: callPeer, candidate: e.candidate });
+  };
+  pc.ontrack = (e) => {
+    remoteAudio.srcObject = e.streams[0];
+    remoteAudio.play().catch(() => {});
+  };
+  pc.onconnectionstatechange = () => {
+    if (pc && (pc.connectionState === "failed")) {
+      addSystem(t().callFailed);
+      endCall(true);
+    } else if (pc && pc.connectionState === "disconnected") {
+      endCall(false);
+      addSystem(t().callEnded);
+    }
+  };
+}
+
+async function getMic() {
+  try {
+    return await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch {
+    addSystem(t().errMic);
+    return null;
+  }
+}
+
+// ---- 전화 걸기 ----
+async function startCall() {
+  if (callState !== "idle" || view.type !== "dm") return;
+  const stream = await getMic();
+  if (!stream) return;
+
+  localStream = stream;
+  callPeer = view.id;
+  callState = "calling";
+  updateCallUi();
+
+  createPeerConnection();
+  localStream.getTracks().forEach((tr) => pc.addTrack(tr, localStream));
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  socket.emit("call:offer", { to: callPeer, sdp: offer });
+}
+
+// ---- 전화 받기 ----
+async function acceptCall() {
+  if (callState !== "ringing" || !pendingOffer) return;
+  const stream = await getMic();
+  if (!stream) { declineCall(); return; }
+
+  localStream = stream;
+  callState = "incall";
+  updateCallUi();
+  startCallTimer();
+
+  createPeerConnection();
+  localStream.getTracks().forEach((tr) => pc.addTrack(tr, localStream));
+  await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer));
+  pendingOffer = null;
+
+  // 대기 중이던 ICE 후보 처리
+  for (const c of pendingIce) {
+    try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}
+  }
+  pendingIce = [];
+
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  socket.emit("call:answer", { to: callPeer, sdp: answer });
+}
+
+function declineCall() {
+  if (callState !== "ringing") return;
+  socket.emit("call:decline", { to: callPeer });
+  cleanupCall();
+}
+
+// ---- 끊기 / 정리 ----
+function endCall(silent) {
+  if (callState === "idle") return;
+  socket.emit("call:end", { to: callPeer });
+  cleanupCall();
+  if (!silent) addSystem(t().callEnded);
+}
+function cleanupCall() {
+  if (callTimerId) { clearInterval(callTimerId); callTimerId = null; }
+  if (localStream) { localStream.getTracks().forEach((tr) => tr.stop()); localStream = null; }
+  if (pc) { pc.onconnectionstatechange = null; pc.close(); pc = null; }
+  remoteAudio.srcObject = null;
+  callPeer = null; callState = "idle";
+  pendingOffer = null; pendingIce = [];
+  updateCallUi();
+}
+
+$("callBtn").onclick = startCall;
+$("hangupBtn").onclick = () => endCall(false);
+$("acceptBtn").onclick = acceptCall;
+$("declineBtn").onclick = declineCall;
+
+/* ==================================================
+   9. 입장 / 소켓 이벤트
 ================================================== */
 $("joinBtn").onclick = join;
 $("passInput").addEventListener("keydown", (e) => { if (e.key === "Enter") join(); });
@@ -489,33 +754,93 @@ function join() {
   if (!socket) {
     socket = io();
 
-    // 채널 메시지 도착
     socket.on("message", (m) => {
       if (view.type === "channel") addMessage(m.nick, m.text, m.time);
     });
 
-    // DM 도착
     socket.on("dm", (m) => {
-      const other = m.from === myNick ? m.to : m.from; // 상대방 닉네임
+      const other = m.from === myNick ? m.to : m.from;
       if (view.type === "dm" && view.id === other) {
         addMessage(m.from, m.text, m.time);
       } else if (m.from !== myNick) {
-        unread[other] = (unread[other] || 0) + 1; // 안 읽은 개수 +1
+        unread[other] = (unread[other] || 0) + 1;
         renderSidebar();
       }
     });
 
-    // 입장/퇴장 알림 (채널 화면에서만 표시)
     socket.on("system", (ev) => {
       if (view.type === "channel") {
         addSystem(ev.type === "join" ? t().joinMsg(ev.nick) : t().leaveMsg(ev.nick));
       }
+      // 통화 상대가 채팅에서 나가면 통화도 종료
+      if (ev.type === "leave" && callState !== "idle" && ev.nick === callPeer) {
+        cleanupCall();
+        addSystem(t().callEnded);
+      }
     });
 
-    // 접속자 목록 갱신
     socket.on("online", (names) => {
       onlineUsers = names;
       renderSidebar();
+    });
+
+    // ---- 통화 신호 ----
+    socket.on("call:offer", (data) => {
+      if (callState !== "idle") {
+        // 이미 통화 중이면 자동으로 "통화 중" 응답
+        socket.emit("call:busy", { to: data.from });
+        return;
+      }
+      callPeer = data.from;
+      callState = "ringing";
+      pendingOffer = data.sdp;
+      pendingIce = [];
+      updateCallUi();
+    });
+
+    socket.on("call:answer", async (data) => {
+      if (callState !== "calling" || data.from !== callPeer || !pc) return;
+      await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      for (const c of pendingIce) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}
+      }
+      pendingIce = [];
+      callState = "incall";
+      updateCallUi();
+      startCallTimer();
+    });
+
+    socket.on("call:ice", async (data) => {
+      if (data.from !== callPeer) return;
+      if (pc && pc.remoteDescription) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch {}
+      } else {
+        pendingIce.push(data.candidate); // 아직 준비 전이면 보관
+      }
+    });
+
+    socket.on("call:decline", (data) => {
+      if (data.from !== callPeer) return;
+      addSystem(t().callDeclined(callPeer));
+      cleanupCall();
+    });
+
+    socket.on("call:busy", (data) => {
+      if (data.from !== callPeer) return;
+      addSystem(t().callBusy(callPeer));
+      cleanupCall();
+    });
+
+    socket.on("call:end", (data) => {
+      if (data.from !== callPeer) return;
+      cleanupCall();
+      addSystem(t().callEnded);
+    });
+
+    socket.on("call:unavailable", (data) => {
+      if (data.from !== callPeer) return;
+      addSystem(t().callOffline(callPeer));
+      cleanupCall();
     });
 
     socket.on("connect_error", () => { $("loginError").textContent = t().errConn; });
@@ -542,7 +867,7 @@ function join() {
 }
 
 /* ==================================================
-   9. 메시지 보내기 (채널 or DM)
+   10. 메시지 보내기 (채널 or DM)
 ================================================== */
 function send() {
   const text = msgInput.value.trim();
